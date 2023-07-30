@@ -25,15 +25,15 @@ async fn main() {
     dotenv().ok();
     
     tracing_subscriber::fmt()
-    .with_max_level(tracing::Level::INFO)
-    .with_target(false)
-    .init();
+        .with_max_level(tracing::Level::INFO)
+        .with_target(false)
+        .init();
 
     let app = Router::new()
-    .route("/images", post(upload_image_route))
-    .layer(DefaultBodyLimit::max(MAX_IMAGE_SIZE))
-    .layer(middleware::from_fn(auth))
-    .route("/", get(health_check_route));
+        .route("/images", post(upload_image_route))
+        .layer(DefaultBodyLimit::max(MAX_IMAGE_SIZE))
+        .layer(middleware::from_fn(auth))
+        .route("/", get(health_check_route));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
 
