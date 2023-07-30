@@ -23,11 +23,21 @@ const MAX_IMAGE_SIZE: usize = 5*1024*1024;
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_target(false)
-        .init();
+
+    if env::var("ENV").unwrap() == "dev" {
+        tracing_subscriber::fmt()
+            .compact()
+            .with_max_level(tracing::Level::INFO)
+            .with_target(false)
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .json()
+            .with_max_level(tracing::Level::INFO)
+            .with_target(false)
+            .init();
+    }
+
 
     let app = Router::new()
         .route("/images", post(upload_image_route))
