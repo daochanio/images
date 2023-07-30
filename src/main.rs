@@ -176,7 +176,7 @@ async fn format_image(data: &[u8], variant: ImageVariants) -> Result<(Vec<u8>, i
             image::ImageFormat::Gif => image::ImageFormat::Gif,
             image::ImageFormat::WebP => image::ImageFormat::WebP,
             // image::ImageFormat::Avif => image::ImageFormat::Avif,
-            _ => return Err("unsupported image format".to_string())
+            _ => return Err(format!("unsupported image format: {:?}", f))
         },
         Err(e) => return Err(format!("could not derive image format: {}", e))
     };
@@ -225,7 +225,7 @@ async fn format_image(data: &[u8], variant: ImageVariants) -> Result<(Vec<u8>, i
 async fn upload_image(id: String, image: Vec<u8>, variant: ImageVariants, format: image::ImageFormat) -> Result<(), String> {
     let region = match env::var("REGION") {
         Ok(r) => Region::new(r),
-        Err(e) => return Err(format!("could not read AWS_REGION: {}", e))
+        Err(e) => return Err(format!("could not read REGION: {}", e))
     };
     let endpoint = match env::var("ENDPOINT") {
         Ok(e) => e,
