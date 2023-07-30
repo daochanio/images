@@ -1,6 +1,6 @@
 use aws_sdk_s3::{config::{Credentials, Region}, primitives::ByteStream};
 use axum::{
-    routing::post,
+    routing::{post, get},
     http::{StatusCode, Request},
     Json,
     Router,
@@ -30,9 +30,10 @@ async fn main() {
     .init();
 
     let app = Router::new()
-        .route("/images", post(upload_image_route))
-        .layer(DefaultBodyLimit::max(MAX_IMAGE_SIZE))
-        .layer(middleware::from_fn(auth));
+    .route("/images", post(upload_image_route))
+    .layer(DefaultBodyLimit::max(MAX_IMAGE_SIZE))
+    .layer(middleware::from_fn(auth))
+    .route("/", get(health_check_route));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
 
@@ -88,6 +89,11 @@ async fn auth<B>(
         Err(StatusCode::UNAUTHORIZED)
     }
 }
+
+async fn health_check_route() -> StatusCode {
+    return StatusCode::OK;
+}
+
 async fn upload_image_route(body: Bytes) -> Response {
     let file_name = match put_image_usecase(body.as_ref()).await {
         Ok(file_name) => file_name,
