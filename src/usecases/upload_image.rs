@@ -13,6 +13,10 @@ pub fn new(storage: Arc<dyn Storage>, images: Arc<dyn Images>) -> UploadImage {
     UploadImage { storage, images }
 }
 
+// TODO:
+// We can run the two tasks in parallel threads but we need to consider the implications of spawning threads from requests.
+// We would likely need to use some kind of thread pool to ensure we don't exhaust the system resources under high request load.
+// Naive tests with threads definitely shows a significant improvement in performance.
 impl UploadImage {
     pub async fn execute(&self, data: &[u8]) -> Result<String, String> {
         let file_name = Uuid::new_v4();
@@ -35,7 +39,7 @@ impl UploadImage {
 
     async fn execute_internal(
         &self,
-        id: String,
+        file_name: String,
         data: &[u8],
         variant: ImageVariants,
     ) -> Result<(), String> {
@@ -46,11 +50,9 @@ impl UploadImage {
 
         let content_type = format!("image/{format}").to_lowercase();
 
-        let key = match variant {
-            ImageVariants::Thumbnail => format!("images/thumbnails/{}", id),
-            ImageVariants::Original => format!("images/originals/{}", id),
-        };
-
-        return self.storage.upload(key, content_type, image).await;
+        return self
+            .storage
+            .upload(file_name, variant, content_type, image)
+            .await;
     }
 }

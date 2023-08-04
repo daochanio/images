@@ -37,8 +37,9 @@ impl Images for ImagesImpl {
         match image::load_from_memory_with_format(data, format) {
             Ok(image) => {
                 let resized_image = match variant {
-                    ImageVariants::Thumbnail => image.thumbnail(250, 250),
                     ImageVariants::Original => image,
+                    ImageVariants::Thumbnail => image.thumbnail(250, 250),
+                    ImageVariants::Avatar => image.thumbnail(100, 100),
                 };
 
                 // Generally, we want to keep the original in its existing format and convert thumbnails to webp for optimized size
@@ -56,6 +57,11 @@ impl Images for ImagesImpl {
                     (image::ImageFormat::WebP, ImageVariants::Thumbnail) => {
                         image::ImageFormat::WebP
                     }
+                    // (image::ImageFormat::Avif, ImageVariants::Original) => image::ImageFormat::Avif,
+                    (image::ImageFormat::Jpeg, ImageVariants::Avatar) => image::ImageFormat::WebP,
+                    (image::ImageFormat::Png, ImageVariants::Avatar) => image::ImageFormat::WebP,
+                    (image::ImageFormat::Gif, ImageVariants::Avatar) => image::ImageFormat::Gif,
+                    (image::ImageFormat::WebP, ImageVariants::Avatar) => image::ImageFormat::WebP,
                     // (image::ImageFormat::Avif, ImageVariants::Original) => image::ImageFormat::Avif,
                     _ => return Err("unsupported output format".to_string()),
                 };

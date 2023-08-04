@@ -1,14 +1,14 @@
 use crate::container::Container;
 use axum::{
     body::Bytes,
-    extract::{DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, Path, State},
     http::{header, Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::iter::once;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -28,9 +28,11 @@ const MAX_REQUEST_DURATION_SECONDS: u64 = 30;
 pub async fn start(container: Arc<Container>) {
     let app = Router::new()
         .nest(
-            "/api/v1",
+            "/v1",
             Router::new()
                 .route("/images", post(upload_image_route))
+                .route("/avatars", put(upload_avatar_route))
+                .route("/images/:id", get(get_image_exists_route))
                 .layer(
                     ServiceBuilder::new()
                         .layer(SetSensitiveRequestHeadersLayer::new(once(
@@ -143,25 +145,70 @@ async fn health_check_route() -> StatusCode {
 }
 
 async fn upload_image_route(State(container): State<Arc<Container>>, body: Bytes) -> Response {
-    let file_name = match container.upload_image.execute(body.as_ref()).await {
-        Ok(file_name) => file_name,
+    return match container.upload_image.execute(body.as_ref()).await {
+        Ok(file_name) => (StatusCode::CREATED, Json(UploadResponse { file_name })).into_response(),
         Err(e) => {
-            tracing::error!("could not put image: {}", e);
-            return (
+            tracing::warn!("could not put image: {}", e);
+            (
                 StatusCode::BAD_REQUEST,
                 Json(ResponseError {
                     error: String::from("could not put image"),
                 }),
             )
-                .into_response();
+                .into_response()
         }
     };
+}
 
-    return (StatusCode::CREATED, Json(UploadImageResponse { file_name })).into_response();
+async fn upload_avatar_route(
+    State(container): State<Arc<Container>>,
+    Json(body): Json<UploadAvatarRequest>,
+) -> Response {
+    return match container.upload_avatar.execute(body.uri, body.is_nft).await {
+        Ok(file_name) => (StatusCode::CREATED, Json(UploadResponse { file_name })).into_response(),
+        Err(e) => {
+            tracing::warn!("could not put avatar: {}", e);
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ResponseError {
+                    error: String::from("could not put avatar"),
+                }),
+            )
+                .into_response()
+        }
+    };
+}
+
+async fn get_image_exists_route(
+    State(container): State<Arc<Container>>,
+    Path(id): Path<String>,
+) -> Response {
+    return match container.image_exists.execute(id).await {
+        Ok(exists) => match exists {
+            true => (StatusCode::OK).into_response(),
+            false => (StatusCode::NOT_FOUND).into_response(),
+        },
+        Err(e) => {
+            tracing::warn!("could not get image exists: {}", e);
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ResponseError {
+                    error: String::from("could not get image exists"),
+                }),
+            )
+                .into_response()
+        }
+    };
+}
+
+#[derive(Deserialize, Debug)]
+struct UploadAvatarRequest {
+    uri: String,
+    is_nft: bool,
 }
 
 #[derive(Serialize, Debug)]
-struct UploadImageResponse {
+struct UploadResponse {
     file_name: String,
 }
 
