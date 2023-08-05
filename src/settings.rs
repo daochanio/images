@@ -8,6 +8,8 @@ pub struct Settings {
     region: String,
     bucket: String,
     endpoint: String,
+    storage_external_url: String,
+    ipfs_gateway_url: String,
 }
 
 pub fn new() -> Settings {
@@ -19,6 +21,8 @@ pub fn new() -> Settings {
         region: env::var("REGION").unwrap(),
         bucket: env::var("BUCKET").unwrap(),
         endpoint: env::var("ENDPOINT").unwrap(),
+        storage_external_url: env::var("STORAGE_EXTERNAL_URL").unwrap(),
+        ipfs_gateway_url: env::var("IPFS_GATEWAY_URL").unwrap(),
     };
 
     let subscriber_builder = fmt().with_target(false);
@@ -61,5 +65,13 @@ impl Settings {
 
     pub fn endpoint(&self) -> String {
         self.endpoint.clone()
+    }
+
+    pub fn storage_external_url(&self) -> String {
+        self.storage_external_url.clone()
+    }
+
+    pub fn ipfs_gateway_url(&self) -> String {
+        self.ipfs_gateway_url.clone()
     }
 }

@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use crate::usecases::gateways::Web;
+use crate::{settings::Settings, usecases::gateways::Web};
 use async_trait::async_trait;
 use reqwest::{
     redirect::{self},
@@ -12,11 +12,13 @@ const MAX_BODY_SIZE: usize = 3 * 1024 * 1024;
 const MAX_REQUEST_DURATION_SECONDS: u64 = 30;
 
 struct Http {
+    settings: Arc<Settings>,
     client: reqwest::Client,
 }
 
-pub fn new() -> impl Web {
+pub fn new(settings: Arc<Settings>) -> impl Web {
     Http {
+        settings,
         client: reqwest::Client::builder()
             .redirect(redirect::Policy::none())
             .timeout(Duration::from_secs(MAX_REQUEST_DURATION_SECONDS))
@@ -86,6 +88,7 @@ impl Web for Http {
 
 impl Http {
     async fn get_with_status_check(&self, url: String) -> Result<Response, String> {
+        let url = self.parse_url(url);
         let resp = match self.client.get(&url).send().await {
             Ok(r) => r,
             Err(e) => return Err(format!("could not get {}: {}", url, e)),
@@ -113,5 +116,23 @@ impl Http {
         }
 
         return Ok(buf);
+    }
+
+    fn parse_url(&self, url: String) -> String {
+        if let Some(suffix) = url.strip_prefix("ipfs://") {
+            let mut suffix = suffix.to_string();
+            if !suffix.starts_with("ipfs/") {
+                suffix = format!("ipfs/{}", suffix);
+            }
+            return format!("{}/{}", self.settings.ipfs_gateway_url(), suffix);
+        }
+        if let Some(suffix) = url.strip_prefix("ipns://") {
+            let mut suffix = suffix.to_string();
+            if !suffix.starts_with("ipns/") {
+                suffix = format!("ipns/{}", suffix);
+            }
+            return format!("{}/{}", self.settings.ipfs_gateway_url(), suffix);
+        }
+        url
     }
 }

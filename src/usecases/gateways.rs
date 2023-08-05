@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 
+use crate::common::enums::ImageVariants;
+
 #[async_trait]
 pub trait Storage: Send + Sync {
     async fn upload(
@@ -8,15 +10,12 @@ pub trait Storage: Send + Sync {
         variant: ImageVariants,
         content_type: String,
         body: Vec<u8>,
-    ) -> Result<(), String>;
-    async fn exists(&self, file_name: String, variant: ImageVariants) -> Result<bool, String>;
-}
-
-#[derive(Debug, Clone)]
-pub enum ImageVariants {
-    Thumbnail,
-    Original,
-    Avatar,
+    ) -> Result<String, String>;
+    async fn get(
+        &self,
+        variant: ImageVariants,
+        file_name: String,
+    ) -> Result<Option<String>, String>;
 }
 
 #[async_trait]

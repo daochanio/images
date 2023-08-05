@@ -2,7 +2,12 @@ use hex;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-use super::gateways::{ImageVariants, Images, Storage, Web};
+use crate::{
+    common::enums::ImageVariants,
+    entities::avatar::{self, Avatar},
+};
+
+use super::gateways::{Images, Storage, Web};
 
 pub struct UploadAvatar {
     storage: Arc<dyn Storage>,
@@ -25,20 +30,17 @@ pub fn new(storage: Arc<dyn Storage>, images: Arc<dyn Images>, web: Arc<dyn Web>
 // - if nft, get image uri from metadata
 // - download image and upload to bucket
 impl UploadAvatar {
-    pub async fn execute(&self, url: String, is_nft: bool) -> Result<String, String> {
+    pub async fn execute(&self, url: String, is_nft: bool) -> Result<Avatar, String> {
         let file_name = self.hash(url.clone());
 
         match self
             .storage
-            .exists(file_name.clone(), ImageVariants::Avatar)
+            .get(ImageVariants::Avatar, file_name.clone())
             .await
         {
-            Ok(exists) => {
-                if exists {
-                    return Ok(file_name);
-                }
-            }
-            Err(e) => return Err(format!("could not check if image exists: {}", e)),
+            Ok(Some(avatar_url)) => return Ok(avatar::new(file_name, avatar_url)),
+            Ok(None) => {}
+            Err(e) => return Err(format!("could not check if avatar exists: {}", e)),
         };
 
         let image_url = match is_nft {
@@ -60,10 +62,10 @@ impl UploadAvatar {
             .await
         {
             Ok((thumbnail, content_type)) => (thumbnail, content_type),
-            Err(e) => return Err(format!("could not resize image: {}", e)),
+            Err(e) => return Err(format!("could not resize avatar: {}", e)),
         };
 
-        return match self
+        match self
             .storage
             .upload(
                 file_name.clone(),
@@ -73,9 +75,9 @@ impl UploadAvatar {
             )
             .await
         {
-            Ok(_) => Ok(file_name),
-            Err(e) => Err(format!("could not upload image: {}", e)),
-        };
+            Ok(avatar_url) => Ok(avatar::new(file_name, avatar_url)),
+            Err(e) => Err(format!("could not upload avatar: {}", e)),
+        }
     }
 
     fn hash(&self, input: String) -> String {

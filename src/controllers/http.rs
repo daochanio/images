@@ -31,8 +31,8 @@ pub async fn start(container: Arc<Container>) {
             "/v1",
             Router::new()
                 .route("/images", post(upload_image_route))
+                .route("/images/:file_name", get(get_image_route))
                 .route("/avatars", put(upload_avatar_route))
-                .route("/images/:id", get(get_image_exists_route))
                 .layer(
                     ServiceBuilder::new()
                         .layer(SetSensitiveRequestHeadersLayer::new(once(
@@ -102,7 +102,7 @@ fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response {
 
     return (
         StatusCode::INTERNAL_SERVER_ERROR,
-        Json(ResponseError { error: details }),
+        Json(ErrorResponse { error: details }),
     )
         .into_response();
 }
@@ -146,12 +146,12 @@ async fn health_check_route() -> StatusCode {
 
 async fn upload_image_route(State(container): State<Arc<Container>>, body: Bytes) -> Response {
     return match container.upload_image.execute(body.as_ref()).await {
-        Ok(file_name) => (StatusCode::CREATED, Json(UploadResponse { file_name })).into_response(),
+        Ok(image) => (StatusCode::CREATED, Json(image)).into_response(),
         Err(e) => {
             tracing::warn!("could not put image: {}", e);
             (
                 StatusCode::BAD_REQUEST,
-                Json(ResponseError {
+                Json(ErrorResponse {
                     error: String::from("could not put image"),
                 }),
             )
@@ -164,13 +164,13 @@ async fn upload_avatar_route(
     State(container): State<Arc<Container>>,
     Json(body): Json<UploadAvatarRequest>,
 ) -> Response {
-    return match container.upload_avatar.execute(body.uri, body.is_nft).await {
-        Ok(file_name) => (StatusCode::CREATED, Json(UploadResponse { file_name })).into_response(),
+    return match container.upload_avatar.execute(body.url, body.is_nft).await {
+        Ok(avatar) => (StatusCode::CREATED, Json(avatar)).into_response(),
         Err(e) => {
             tracing::warn!("could not put avatar: {}", e);
             (
                 StatusCode::BAD_REQUEST,
-                Json(ResponseError {
+                Json(ErrorResponse {
                     error: String::from("could not put avatar"),
                 }),
             )
@@ -179,20 +179,20 @@ async fn upload_avatar_route(
     };
 }
 
-async fn get_image_exists_route(
+async fn get_image_route(
     State(container): State<Arc<Container>>,
-    Path(id): Path<String>,
+    Path(file_name): Path<String>,
 ) -> Response {
-    return match container.image_exists.execute(id).await {
-        Ok(exists) => match exists {
-            true => (StatusCode::OK).into_response(),
-            false => (StatusCode::NOT_FOUND).into_response(),
+    return match container.get_image.execute(file_name).await {
+        Ok(image) => match image {
+            Some(image) => (StatusCode::OK, Json(image)).into_response(),
+            None => (StatusCode::NOT_FOUND).into_response(),
         },
         Err(e) => {
             tracing::warn!("could not get image exists: {}", e);
             (
                 StatusCode::BAD_REQUEST,
-                Json(ResponseError {
+                Json(ErrorResponse {
                     error: String::from("could not get image exists"),
                 }),
             )
@@ -203,16 +203,11 @@ async fn get_image_exists_route(
 
 #[derive(Deserialize, Debug)]
 struct UploadAvatarRequest {
-    uri: String,
+    url: String,
     is_nft: bool,
 }
 
 #[derive(Serialize, Debug)]
-struct UploadResponse {
-    file_name: String,
-}
-
-#[derive(Serialize, Debug)]
-struct ResponseError {
+struct ErrorResponse {
     error: String,
 }

@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use async_trait::async_trait;
 
-use crate::usecases::gateways::{ImageVariants, Images};
+use crate::{common::enums::ImageVariants, usecases::gateways::Images};
 
 struct ImagesImpl {}
 
@@ -13,8 +13,8 @@ pub fn new() -> impl Images {
 // TODO:
 // - add avif support?
 // - convert gif to webp?
-// - only scale down if image is larger than 250x250
-// - scale up if image is smaller than 250x250?
+// - only scale down if image is larger than dimensions
+// - scale up if image is smaller than dimensions?
 #[async_trait]
 impl Images for ImagesImpl {
     async fn resize(
@@ -38,8 +38,8 @@ impl Images for ImagesImpl {
             Ok(image) => {
                 let resized_image = match variant {
                     ImageVariants::Original => image,
-                    ImageVariants::Thumbnail => image.thumbnail(250, 250),
-                    ImageVariants::Avatar => image.thumbnail(100, 100),
+                    ImageVariants::Thumbnail => image.thumbnail(262, 262),
+                    ImageVariants::Avatar => image.thumbnail(168, 168),
                 };
 
                 // Generally, we want to keep the original in its existing format and convert thumbnails to webp for optimized size
@@ -72,7 +72,10 @@ impl Images for ImagesImpl {
                     Err(e) => return Err(format!("could not write image: {}", e)),
                 }
 
-                return Ok((buffer.into_inner(), format!("{:?}", output_format)));
+                return Ok((
+                    buffer.into_inner(),
+                    format!("image/{:?}", output_format).to_lowercase(),
+                ));
             }
             Err(e) => return Err(format!("could not load image: {}", e)),
         }

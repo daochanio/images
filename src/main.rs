@@ -1,8 +1,10 @@
 use controllers::http;
 use std::sync::Arc;
 
+mod common;
 mod container;
 mod controllers;
+mod entities;
 mod gateways;
 mod settings;
 mod usecases;

@@ -1,7 +1,4 @@
-use crate::{
-    settings::Settings,
-    usecases::gateways::{ImageVariants, Storage},
-};
+use crate::{common::enums::ImageVariants, settings::Settings, usecases::gateways::Storage};
 use async_trait::async_trait;
 use aws_sdk_s3::{config::Region, error::SdkError, primitives::ByteStream, Client};
 use std::sync::Arc;
@@ -30,40 +27,44 @@ impl Storage for S3 {
         variant: ImageVariants,
         content_type: String,
         body: Vec<u8>,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         let bucket = self.settings.bucket();
-        let key = self.get_key(file_name, variant);
+        let key = self.get_key(file_name.clone(), variant);
         return match self
             .client
             .put_object()
             .bucket(bucket)
-            .key(key)
+            .key(key.clone())
             .content_type(content_type)
             .body(ByteStream::from(body))
             .send()
             .await
         {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(self.get_external_url(key)),
             Err(e) => Err(format!("could not upload image: {}", e)),
         };
     }
 
-    async fn exists(&self, file_name: String, variant: ImageVariants) -> Result<bool, String> {
+    async fn get(
+        &self,
+        variant: ImageVariants,
+        file_name: String,
+    ) -> Result<Option<String>, String> {
         let bucket = self.settings.bucket();
-        let key = self.get_key(file_name, variant);
+        let key = self.get_key(file_name.clone(), variant);
         return match self
             .client
             .head_object()
             .bucket(bucket)
-            .key(key)
+            .key(key.clone())
             .send()
             .await
         {
-            Ok(_) => Ok(true),
+            Ok(_) => Ok(Some(self.get_external_url(key))),
             Err(e) => match e {
                 SdkError::ServiceError(err) => {
                     if err.err().is_not_found() {
-                        Ok(false)
+                        Ok(None)
                     } else {
                         Err(format!("could not check if image exists: {}", err.err()))
                     }
@@ -81,5 +82,9 @@ impl S3 {
             ImageVariants::Original => format!("images/originals/{}", id),
             ImageVariants::Avatar => format!("images/avatars/{}", id),
         };
+    }
+
+    fn get_external_url(&self, key: String) -> String {
+        return format!("{}/{}", self.settings.storage_external_url(), key);
     }
 }
