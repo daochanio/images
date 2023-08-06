@@ -25,6 +25,7 @@ pub trait Images: Send + Sync {
         data: &[u8],
         variant: ImageVariants,
     ) -> Result<(Vec<u8>, String), String>;
+    fn get_content_type(&self, data: &[u8]) -> Result<String, String>;
 }
 
 #[async_trait]

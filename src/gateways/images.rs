@@ -1,6 +1,8 @@
 use std::io::Cursor;
 
 use async_trait::async_trait;
+use image::codecs::gif::{GifDecoder, GifEncoder, Repeat};
+use image::{AnimationDecoder, DynamicImage, Frame};
 
 use crate::{common::enums::ImageVariants, usecases::gateways::Images};
 
@@ -10,74 +12,93 @@ pub fn new() -> impl Images {
     ImagesImpl {}
 }
 
-// TODO:
-// - add avif support?
-// - convert gif to webp?
-// - only scale down if image is larger than dimensions
-// - scale up if image is smaller than dimensions?
 #[async_trait]
 impl Images for ImagesImpl {
+    // TODO:
+    // - add avif support?
     async fn resize(
         &self,
         data: &[u8],
         variant: ImageVariants,
     ) -> Result<(Vec<u8>, String), String> {
-        let format = match image::guess_format(data) {
-            Ok(f) => match f {
-                image::ImageFormat::Jpeg => image::ImageFormat::Jpeg,
-                image::ImageFormat::Png => image::ImageFormat::Png,
-                image::ImageFormat::Gif => image::ImageFormat::Gif,
-                image::ImageFormat::WebP => image::ImageFormat::WebP,
-                // image::ImageFormat::Avif => image::ImageFormat::Avif,
-                _ => return Err(format!("unsupported image format: {:?}", f)),
-            },
-            Err(e) => return Err(format!("could not derive image format: {}", e)),
+        let (nwidth, nheight) = match variant {
+            ImageVariants::Thumbnail => (300, 300),
+            ImageVariants::Avatar => (125, 125),
+            ImageVariants::Original => (800, 800),
         };
 
-        match image::load_from_memory_with_format(data, format) {
-            Ok(image) => {
-                let resized_image = match variant {
-                    ImageVariants::Original => image,
-                    ImageVariants::Thumbnail => image.thumbnail(262, 262),
-                    ImageVariants::Avatar => image.thumbnail(168, 168),
-                };
-
-                // Generally, we want to keep the original in its existing format and convert thumbnails to webp for optimized size
-                let output_format = match (format, variant) {
-                    (image::ImageFormat::Jpeg, ImageVariants::Original) => image::ImageFormat::Jpeg,
-                    (image::ImageFormat::Png, ImageVariants::Original) => image::ImageFormat::Png,
-                    (image::ImageFormat::Gif, ImageVariants::Original) => image::ImageFormat::Gif,
-                    (image::ImageFormat::WebP, ImageVariants::Original) => image::ImageFormat::WebP,
-                    // (image::ImageFormat::Avif, ImageVariants::Original) => image::ImageFormat::Avif,
-                    (image::ImageFormat::Jpeg, ImageVariants::Thumbnail) => {
-                        image::ImageFormat::WebP
-                    }
-                    (image::ImageFormat::Png, ImageVariants::Thumbnail) => image::ImageFormat::WebP,
-                    (image::ImageFormat::Gif, ImageVariants::Thumbnail) => image::ImageFormat::Gif,
-                    (image::ImageFormat::WebP, ImageVariants::Thumbnail) => {
-                        image::ImageFormat::WebP
-                    }
-                    // (image::ImageFormat::Avif, ImageVariants::Original) => image::ImageFormat::Avif,
-                    (image::ImageFormat::Jpeg, ImageVariants::Avatar) => image::ImageFormat::WebP,
-                    (image::ImageFormat::Png, ImageVariants::Avatar) => image::ImageFormat::WebP,
-                    (image::ImageFormat::Gif, ImageVariants::Avatar) => image::ImageFormat::Gif,
-                    (image::ImageFormat::WebP, ImageVariants::Avatar) => image::ImageFormat::WebP,
-                    // (image::ImageFormat::Avif, ImageVariants::Original) => image::ImageFormat::Avif,
-                    _ => return Err("unsupported output format".to_string()),
-                };
-
-                let mut buffer = Cursor::new(Vec::new());
-                match resized_image.write_to(&mut buffer, output_format) {
-                    Ok(_) => (),
-                    Err(e) => return Err(format!("could not write image: {}", e)),
+        return match image::guess_format(data) {
+            Ok(format) => match format {
+                image::ImageFormat::Jpeg | image::ImageFormat::Png | image::ImageFormat::WebP => {
+                    self.resize_image(data, nwidth, nheight, format)
                 }
+                image::ImageFormat::Gif => self.resize_gif(data, nwidth, nheight),
+                _ => Err(format!("unsupported image format: {:?}", format)),
+            },
+            Err(e) => Err(format!("could not derive image format: {}", e)),
+        };
+    }
 
-                return Ok((
-                    buffer.into_inner(),
-                    format!("image/{:?}", output_format).to_lowercase(),
-                ));
-            }
+    fn get_content_type(&self, data: &[u8]) -> Result<String, String> {
+        return match image::guess_format(data) {
+            Ok(format) => match format {
+                image::ImageFormat::Jpeg => Ok(String::from("image/jpeg")),
+                image::ImageFormat::Png => Ok(String::from("image/png")),
+                image::ImageFormat::WebP => Ok(String::from("image/webp")),
+                image::ImageFormat::Gif => Ok(String::from("image/gif")),
+                _ => Err(format!("unsupported image format: {:?}", format)),
+            },
+            Err(e) => Err(format!("could not derive image format: {}", e)),
+        };
+    }
+}
+
+impl ImagesImpl {
+    fn resize_image(
+        &self,
+        data: &[u8],
+        nwidth: u32,
+        nheight: u32,
+        format: image::ImageFormat,
+    ) -> Result<(Vec<u8>, String), String> {
+        let mut image = match image::load_from_memory_with_format(data, format) {
+            Ok(image) => image,
             Err(e) => return Err(format!("could not load image: {}", e)),
+        };
+
+        image = image.resize(nwidth, nheight, image::imageops::FilterType::CatmullRom);
+
+        let mut buffer = Cursor::new(Vec::new());
+        match image.write_to(&mut buffer, image::ImageFormat::WebP) {
+            Ok(_) => (),
+            Err(e) => return Err(format!("could not write image: {}", e)),
         }
+
+        return Ok((buffer.into_inner(), String::from("image/webp")));
+    }
+
+    fn resize_gif(
+        &self,
+        data: &[u8],
+        nwidth: u32,
+        nheight: u32,
+    ) -> Result<(Vec<u8>, String), String> {
+        let mut output = Vec::new();
+        let mut encoder = GifEncoder::new_with_speed(&mut output, 20);
+        encoder.set_repeat(Repeat::Infinite).unwrap();
+
+        let decoder = GifDecoder::new(data).unwrap();
+        let frames = decoder.into_frames();
+
+        for frame in frames {
+            let image = DynamicImage::from(frame.unwrap().into_buffer());
+            let resized = image.resize(nwidth, nheight, image::imageops::FilterType::CatmullRom);
+            let resized_frame = Frame::new(resized.into_rgba8());
+            encoder.encode_frame(resized_frame).unwrap();
+        }
+
+        drop(encoder);
+
+        return Ok((output, String::from("image/gif")));
     }
 }
