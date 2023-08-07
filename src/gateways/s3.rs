@@ -36,6 +36,7 @@ impl Storage for S3 {
             .bucket(bucket)
             .key(key.clone())
             .content_type(content_type)
+            .cache_control("max-age=31536000") // 1yr
             .body(ByteStream::from(body))
             .send()
             .await
