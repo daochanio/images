@@ -53,6 +53,11 @@ impl Images for ImagesImpl {
     }
 }
 
+// TODO:
+// switch back to webp encoding once fixed:
+// - https://github.com/image-rs/image/issues/1957
+// - https://github.com/jaredforth/webp/issues/27
+// - seems to potentially be fixed in webp 0.2.5 when image is released with the version bump
 impl ImagesImpl {
     fn resize_image(
         &self,
@@ -69,12 +74,12 @@ impl ImagesImpl {
         image = image.resize(nwidth, nheight, image::imageops::FilterType::CatmullRom);
 
         let mut buffer = Cursor::new(Vec::new());
-        match image.write_to(&mut buffer, image::ImageFormat::WebP) {
+        match image.write_to(&mut buffer, image::ImageFormat::Jpeg) {
             Ok(_) => (),
             Err(e) => return Err(format!("could not write image: {}", e)),
         }
 
-        return Ok((buffer.into_inner(), String::from("image/webp")));
+        return Ok((buffer.into_inner(), String::from("image/jpeg")));
     }
 
     fn resize_gif(
