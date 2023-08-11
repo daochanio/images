@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-pub enum ImageVariants {
+pub enum Variant {
     Thumbnail,
     Original,
     Avatar,

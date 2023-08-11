@@ -11,7 +11,12 @@ mod usecases;
 
 #[tokio::main]
 async fn main() {
-    let container = container::new().await;
+    let container = Arc::new(container::new().await);
 
-    http::start(Arc::new(container)).await;
+    let cloned_container = container.clone();
+    tokio::spawn(async move {
+        controllers::cleaner::start(cloned_container).await;
+    });
+
+    http::start(container.clone()).await;
 }

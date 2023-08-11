@@ -1,4 +1,4 @@
-use crate::container::Container;
+use crate::{common::variant::Variant, container::Container};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, Path, State},
@@ -13,7 +13,7 @@ use std::iter::once;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::{any::Any, time::Duration};
-use tokio::signal;
+use tokio::signal::unix::{signal, SignalKind};
 use tower::ServiceBuilder;
 use tower_http::{
     catch_panic::CatchPanicLayer, sensitive_headers::SetSensitiveRequestHeadersLayer,
@@ -68,25 +68,17 @@ pub async fn start(container: Arc<Container>) {
 }
 
 async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
+    let mut interrupt_signal =
+        signal(SignalKind::interrupt()).expect("Failed to register interrupt signal handler");
+    let mut terminate_signal =
+        signal(SignalKind::terminate()).expect("Failed to register terminate signal handler");
 
     tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+        _ = interrupt_signal.recv() => {},
+        _ = terminate_signal.recv() => {},
     }
 
-    tracing::info!("received shutdown signal");
+    tracing::info!("received shutdown signal, exiting http");
 }
 
 fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response {
@@ -145,7 +137,13 @@ async fn health_check_route() -> StatusCode {
 }
 
 async fn upload_image_route(State(container): State<Arc<Container>>, body: Bytes) -> Response {
-    return match container.upload_image.execute(body.as_ref()).await {
+    let file_name = Uuid::new_v4();
+
+    return match container
+        .upload_image
+        .execute(file_name.to_string(), body.as_ref(), Variant::Thumbnail)
+        .await
+    {
         Ok(image) => (StatusCode::CREATED, Json(image)).into_response(),
         Err(e) => {
             tracing::warn!("could not put image: {}", e);
@@ -183,7 +181,11 @@ async fn get_image_route(
     State(container): State<Arc<Container>>,
     Path(file_name): Path<String>,
 ) -> Response {
-    return match container.get_image.execute(file_name).await {
+    return match container
+        .get_image
+        .execute(file_name, Variant::Thumbnail)
+        .await
+    {
         Ok(image) => match image {
             Some(image) => (StatusCode::OK, Json(image)).into_response(),
             None => (StatusCode::NOT_FOUND).into_response(),

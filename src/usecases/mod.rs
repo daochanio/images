@@ -1,3 +1,4 @@
+pub mod clean_videos;
 pub mod gateways;
 pub mod get_image;
 pub mod upload_avatar;

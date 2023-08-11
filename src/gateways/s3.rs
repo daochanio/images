@@ -1,4 +1,4 @@
-use crate::{common::enums::ImageVariants, settings::Settings, usecases::gateways::Storage};
+use crate::{common::variant::Variant, settings::Settings, usecases::gateways::Storage};
 use async_trait::async_trait;
 use aws_sdk_s3::{config::Region, error::SdkError, primitives::ByteStream, Client};
 use std::sync::Arc;
@@ -24,7 +24,7 @@ impl Storage for S3 {
     async fn upload(
         &self,
         file_name: String,
-        variant: ImageVariants,
+        variant: Variant,
         content_type: String,
         body: Vec<u8>,
     ) -> Result<String, String> {
@@ -48,12 +48,12 @@ impl Storage for S3 {
 
     async fn get(
         &self,
-        variant: ImageVariants,
+        variant: Variant,
         file_name: String,
-    ) -> Result<Option<String>, String> {
+    ) -> Result<Option<(String, String)>, String> {
         let bucket = self.settings.bucket();
         let key = self.get_key(file_name.clone(), variant);
-        return match self
+        let header = match self
             .client
             .head_object()
             .bucket(bucket)
@@ -61,27 +61,35 @@ impl Storage for S3 {
             .send()
             .await
         {
-            Ok(_) => Ok(Some(self.get_external_url(key))),
+            Ok(header) => header,
             Err(e) => match e {
                 SdkError::ServiceError(err) => {
                     if err.err().is_not_found() {
-                        Ok(None)
+                        return Ok(None);
                     } else {
-                        Err(format!("could not check if image exists: {}", err.err()))
+                        return Err(format!("could not check if image exists: {}", err.err()));
                     }
                 }
-                _ => Err(format!("could not check if image exists: {}", e)),
+                _ => return Err(format!("could not check if image exists: {}", e)),
             },
         };
+
+        let content_type = match header.content_type() {
+            Some(content_type) => content_type.to_string(),
+            None => return Err(format!("could not get content type for {}", key)),
+        };
+        let url = self.get_external_url(key);
+
+        Ok(Some((url, content_type)))
     }
 }
 
 impl S3 {
-    fn get_key(&self, id: String, variant: ImageVariants) -> String {
+    fn get_key(&self, id: String, variant: Variant) -> String {
         return match variant {
-            ImageVariants::Thumbnail => format!("images/thumbnails/{}", id),
-            ImageVariants::Original => format!("images/originals/{}", id),
-            ImageVariants::Avatar => format!("images/avatars/{}", id),
+            Variant::Thumbnail => format!("images/thumbnails/{}", id),
+            Variant::Original => format!("images/originals/{}", id),
+            Variant::Avatar => format!("images/avatars/{}", id),
         };
     }
 
