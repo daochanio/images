@@ -18,18 +18,18 @@ pub struct Container {
 
 pub async fn new() -> Container {
     let settings = Arc::new(settings::new());
-    let s3 = Arc::new(gateways::s3::new(settings.clone()).await);
+    let storage = Arc::new(gateways::s3::new(settings.clone()).await);
     let images = Arc::new(gateways::images::new());
-    let http = Arc::new(gateways::http::new(settings.clone()));
+    let web = Arc::new(gateways::http::new(settings.clone()));
     let video = Arc::new(gateways::video::new());
     let upload_image = Arc::new(usecases::upload_image::new(
-        s3.clone(),
+        storage.clone(),
         images.clone(),
         video.clone(),
     ));
-    let get_image = Arc::new(usecases::get_image::new(s3.clone()));
+    let get_image = Arc::new(usecases::get_image::new(storage.clone()));
     let upload_avatar = Arc::new(usecases::upload_avatar::new(
-        http.clone(),
+        web.clone(),
         upload_image.clone(),
         get_image.clone(),
     ));

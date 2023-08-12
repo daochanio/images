@@ -48,6 +48,16 @@ impl Video for VideoImpl {
             .arg("-an") // no audio
             .arg("-r") // frame rate
             .arg("16")
+            .arg("-crf") // quality
+            .arg("23")
+            .arg("-preset") // speed
+            .arg("slow")
+            .arg("-c:v") // codec
+            .arg("libx264")
+            .arg("-movflags") // fast start
+            .arg("+faststart")
+            .arg("-pix_fmt") // pixel format
+            .arg("yuv420p") // required for safari and firefox
             .arg(&output_path)
             .spawn()
         {
