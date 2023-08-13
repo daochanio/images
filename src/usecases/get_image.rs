@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 
 use crate::{
     common::variant::Variant,
@@ -47,8 +47,8 @@ impl GetImage {
                 tracing::warn!("neither original nor thumbnail exists");
                 Ok(None)
             }
-            (Err(e), _) => Err(anyhow!("could not check if original exists: {}", e)),
-            (_, Err(e)) => Err(anyhow!("could not check if thumbnail exists: {}", e)),
+            (Err(e), _) => bail!("could not check if original exists: {}", e),
+            (_, Err(e)) => bail!("could not check if thumbnail exists: {}", e),
         }
     }
 }

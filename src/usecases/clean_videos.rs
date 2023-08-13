@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Context, Result};
 
 use super::gateways::Video;
 
@@ -21,7 +21,7 @@ impl CleanVideos {
         self.video
             .clean(STALE_SECONDS)
             .await
-            .map_err(|e| anyhow!("could not clean videos: {}", e))?;
+            .context("could not clean videos")?;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(STALE_SECONDS)).await;
 

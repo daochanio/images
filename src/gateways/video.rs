@@ -6,7 +6,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use tokio::process::Command;
 
@@ -61,15 +61,12 @@ impl Video for VideoImpl {
             .arg("yuv420p") // required for safari and firefox
             .arg(&output_path)
             .spawn()
-            .map_err(|e| anyhow!("could not spawn video process: {}", e))?;
+            .context("could not spawn video process")?;
 
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| anyhow!("video process errored: {}", e))?;
+        let status = child.wait().await.context("video process errored")?;
 
         if !status.success() {
-            return Err(anyhow!("video process exited with status: {}", status));
+            bail!("video process exited with status: {}", status);
         }
 
         let buffer = self.read(&output_path)?;
@@ -80,24 +77,20 @@ impl Video for VideoImpl {
     async fn clean(&self, stale_seconds: u64) -> Result<()> {
         let now = SystemTime::now();
 
-        let entries = fs::read_dir(PathBuf::from(DIRECTORY))
-            .map_err(|e| anyhow!("could not read directory: {}", e))?;
+        let entries = fs::read_dir(PathBuf::from(DIRECTORY)).context("could not read directory")?;
 
         for entry in entries {
-            let entry = entry.map_err(|e| anyhow!("could not read directory entry: {}", e))?;
+            let entry = entry.context("could not read directory entry")?;
 
             let metadata = entry
                 .metadata()
-                .map_err(|e| anyhow!("could not read directory entry metadata: {}", e))?;
+                .context("could not read directory entry metadata")?;
 
             if metadata.is_file() {
                 if let Ok(time) = metadata.modified() {
-                    let elapsed_dur = now
-                        .duration_since(time)
-                        .map_err(|e| anyhow!("could not get duration: {}", e))?;
+                    let elapsed_dur = now.duration_since(time).context("could not get duration")?;
                     if elapsed_dur > Duration::from_secs(stale_seconds) {
-                        fs::remove_file(entry.path())
-                            .map_err(|e| anyhow!("could not remove file: {}", e))?;
+                        fs::remove_file(entry.path()).context("could not remove file")?;
                     }
                 }
             }
@@ -109,22 +102,20 @@ impl Video for VideoImpl {
 
 impl VideoImpl {
     fn write(&self, path: &PathBuf, body: &Vec<u8>) -> Result<()> {
-        let mut file =
-            fs::File::create(path).map_err(|e| anyhow!("could not create file: {}", e))?;
+        let mut file = fs::File::create(path).context("could not create file")?;
 
-        file.write_all(body)
-            .map_err(|e| anyhow!("could not write file: {}", e))?;
+        file.write_all(body).context("could not write file")?;
 
         Ok(())
     }
 
     fn read(&self, path: &PathBuf) -> Result<Vec<u8>> {
-        let mut file = fs::File::open(path).map_err(|e| anyhow!("could not open file: {}", e))?;
+        let mut file = fs::File::open(path).context("could not open file")?;
 
         let mut buffer = Vec::new();
 
         file.read_to_end(&mut buffer)
-            .map_err(|e| anyhow!("could not read file: {}", e))?;
+            .context("could not read file")?;
 
         Ok(buffer)
     }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Context, Result};
 
 use super::gateways::{Images, Storage, Video};
 use crate::{
@@ -28,8 +28,7 @@ pub fn new(
 
 impl UploadImage {
     pub async fn execute(&self, file_name: String, data: &[u8], variant: Variant) -> Result<Image> {
-        let input_format =
-            Format::infer(data).map_err(|e| anyhow!("could not infer format: {}", e))?;
+        let input_format = Format::infer(data).context("could not infer format")?;
 
         let result = match input_format {
             Format::Jpeg | Format::Png | Format::WebP => {
@@ -44,8 +43,7 @@ impl UploadImage {
             }
         };
 
-        let (thumbnail, output_format) =
-            result.map_err(|e| anyhow!("could not resize image: {}", e))?;
+        let (thumbnail, output_format) = result.context("could not resize image")?;
 
         let (original_result, thumbnail_result) = tokio::join!(
             self.storage.upload(
@@ -70,8 +68,8 @@ impl UploadImage {
                 thumbnail_url,
                 output_format.content_type(),
             )),
-            (Err(e), _) => Err(anyhow!("could not upload original: {}", e)),
-            (_, Err(e)) => Err(anyhow!("could not upload thumbnail: {}", e)),
+            (Err(e), _) => bail!("could not upload original: {}", e),
+            (_, Err(e)) => bail!("could not upload thumbnail: {}", e),
         }
     }
 }

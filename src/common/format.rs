@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 
 #[derive(Debug, Clone)]
 pub enum Format {
@@ -19,9 +19,9 @@ impl Format {
                 "webp" => Ok(Format::WebP),
                 "gif" => Ok(Format::Gif),
                 "mp4" => Ok(Format::Mp4),
-                _ => Err(anyhow!("unsupported format")),
+                _ => bail!("unsupported format"),
             },
-            None => Err(anyhow!("could not get format")),
+            None => bail!("could not get format"),
         }
     }
 

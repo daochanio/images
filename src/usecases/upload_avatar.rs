@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Context, Result};
 use hex;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -47,7 +47,7 @@ impl UploadAvatar {
             Ok(None) => {
                 tracing::info!("avatar does not exist, hydrating...");
             }
-            Err(e) => return Err(anyhow!("could not check if avatar exists: {}", e)),
+            Err(e) => bail!("could not check if avatar exists: {}", e),
         };
 
         let image_url = match is_nft {
@@ -55,7 +55,7 @@ impl UploadAvatar {
                 .web
                 .get_nft_image_url(url)
                 .await
-                .map_err(|e| anyhow!("could not get nft uri: {}", e))?,
+                .context("could not get nft uri")?,
             false => url,
         };
 
@@ -63,7 +63,7 @@ impl UploadAvatar {
             .web
             .get_image_data(image_url)
             .await
-            .map_err(|e| anyhow!("could not get image data: {}", e))?;
+            .context("could not get image data")?;
 
         self.upload_image
             .execute(file_name, &data, Variant::Avatar)

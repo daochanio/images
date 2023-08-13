@@ -1,5 +1,5 @@
 use crate::{common::variant::Variant, settings::Settings, usecases::gateways::Storage};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use aws_sdk_s3::{config::Region, error::SdkError, primitives::ByteStream, Client};
 use std::sync::Arc;
@@ -64,10 +64,10 @@ impl Storage for S3 {
                     if err.err().is_not_found() {
                         return Ok(None);
                     } else {
-                        return Err(anyhow!("could not check if image exists: {}", err.err()));
+                        bail!("could not check if image exists: {}", err.err());
                     }
                 }
-                _ => return Err(anyhow!("could not check if image exists: {}", e)),
+                _ => bail!("could not check if image exists: {}", e),
             },
         };
 
@@ -83,14 +83,14 @@ impl Storage for S3 {
 
 impl S3 {
     fn get_key(&self, id: String, variant: Variant) -> String {
-        return match variant {
+        match variant {
             Variant::Thumbnail => format!("images/thumbnails/{}", id),
             Variant::Original => format!("images/originals/{}", id),
             Variant::Avatar => format!("images/avatars/{}", id),
-        };
+        }
     }
 
     fn get_external_url(&self, key: String) -> String {
-        return format!("{}/{}", self.settings.storage_external_url(), key);
+        format!("{}/{}", self.settings.storage_external_url(), key)
     }
 }
