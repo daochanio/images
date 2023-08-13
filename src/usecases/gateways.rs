@@ -1,3 +1,4 @@
+use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::common::{format::Format, variant::Variant};
@@ -10,12 +11,8 @@ pub trait Storage: Send + Sync {
         variant: Variant,
         content_type: String,
         body: Vec<u8>,
-    ) -> Result<String, String>;
-    async fn get(
-        &self,
-        variant: Variant,
-        file_name: String,
-    ) -> Result<Option<(String, String)>, String>;
+    ) -> Result<String>;
+    async fn get(&self, variant: Variant, file_name: String) -> Result<Option<(String, String)>>;
 }
 
 #[async_trait]
@@ -25,13 +22,13 @@ pub trait Images: Send + Sync {
         data: &[u8],
         variant: Variant,
         input_format: Format,
-    ) -> Result<(Vec<u8>, Format), String>;
+    ) -> Result<(Vec<u8>, Format)>;
 }
 
 #[async_trait]
 pub trait Web: Send + Sync {
-    async fn get_nft_image_url(&self, url: String) -> Result<String, String>;
-    async fn get_image_data(&self, url: String) -> Result<Vec<u8>, String>;
+    async fn get_nft_image_url(&self, url: String) -> Result<String>;
+    async fn get_image_data(&self, url: String) -> Result<Vec<u8>>;
 }
 
 #[async_trait]
@@ -41,6 +38,6 @@ pub trait Video: Send + Sync {
         data: &[u8],
         variant: Variant,
         input_format: Format,
-    ) -> Result<(Vec<u8>, Format), String>;
-    async fn clean(&self, stale_seconds: u64) -> Result<(), String>;
+    ) -> Result<(Vec<u8>, Format)>;
+    async fn clean(&self, stale_seconds: u64) -> Result<()>;
 }

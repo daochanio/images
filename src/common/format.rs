@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 #[derive(Debug, Clone)]
 pub enum Format {
     Jpeg,
@@ -8,7 +10,7 @@ pub enum Format {
 }
 
 impl Format {
-    pub fn infer(data: &[u8]) -> Result<Format, String> {
+    pub fn infer(data: &[u8]) -> Result<Format> {
         match infer::get(data) {
             Some(kind) => match kind.extension() {
                 "jpeg" => Ok(Format::Jpeg),
@@ -17,9 +19,9 @@ impl Format {
                 "webp" => Ok(Format::WebP),
                 "gif" => Ok(Format::Gif),
                 "mp4" => Ok(Format::Mp4),
-                _ => Err(String::from("unsupported format")),
+                _ => Err(anyhow!("unsupported format")),
             },
-            None => Err(String::from("could not get format")),
+            None => Err(anyhow!("could not get format")),
         }
     }
 

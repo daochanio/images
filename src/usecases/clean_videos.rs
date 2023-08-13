@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
+
 use super::gateways::Video;
 
 pub struct CleanVideos {
@@ -13,13 +15,13 @@ pub fn new(video: Arc<dyn Video>) -> CleanVideos {
 const STALE_SECONDS: u64 = 2 * 60; // 2 mins
 
 impl CleanVideos {
-    pub async fn execute(&self) -> Result<(), String> {
+    pub async fn execute(&self) -> Result<()> {
         tracing::info!("cleaning videos");
 
-        match self.video.clean(STALE_SECONDS).await {
-            Ok(_) => {}
-            Err(e) => return Err(format!("could not clean videos: {}", e)),
-        };
+        self.video
+            .clean(STALE_SECONDS)
+            .await
+            .map_err(|e| anyhow!("could not clean videos: {}", e))?;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(STALE_SECONDS)).await;
 

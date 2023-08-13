@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
+
 use crate::{
     common::variant::Variant,
     entities::image::{self, Image},
@@ -16,11 +18,7 @@ pub fn new(storage: Arc<dyn Storage>) -> GetImage {
 }
 
 impl GetImage {
-    pub async fn execute(
-        &self,
-        file_name: String,
-        variant: Variant,
-    ) -> Result<Option<Image>, String> {
+    pub async fn execute(&self, file_name: String, variant: Variant) -> Result<Option<Image>> {
         let (original_result, thumbnail_result) = tokio::join!(
             self.storage.get(Variant::Original, file_name.to_string()),
             self.storage.get(variant, file_name.to_string()),
@@ -49,8 +47,8 @@ impl GetImage {
                 tracing::warn!("neither original nor thumbnail exists");
                 Ok(None)
             }
-            (Err(e), _) => Err(format!("could not check if original exists: {}", e)),
-            (_, Err(e)) => Err(format!("could not check if thumbnail exists: {}", e)),
+            (Err(e), _) => Err(anyhow!("could not check if original exists: {}", e)),
+            (_, Err(e)) => Err(anyhow!("could not check if thumbnail exists: {}", e)),
         }
     }
 }

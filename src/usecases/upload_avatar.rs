@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use hex;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -31,7 +32,7 @@ pub fn new(
 // - if nft, get image url from metadata url
 // - download image from url and format/upload
 impl UploadAvatar {
-    pub async fn execute(&self, url: String, is_nft: bool) -> Result<Image, String> {
+    pub async fn execute(&self, url: String, is_nft: bool) -> Result<Image> {
         let file_name = self.hash(url.clone());
 
         match self
@@ -46,21 +47,23 @@ impl UploadAvatar {
             Ok(None) => {
                 tracing::info!("avatar does not exist, hydrating...");
             }
-            Err(e) => return Err(format!("could not check if avatar exists: {}", e)),
+            Err(e) => return Err(anyhow!("could not check if avatar exists: {}", e)),
         };
 
         let image_url = match is_nft {
-            true => match self.web.get_nft_image_url(url).await {
-                Ok(nft_image_uri) => nft_image_uri,
-                Err(e) => return Err(format!("could not get nft uri: {}", e)),
-            },
+            true => self
+                .web
+                .get_nft_image_url(url)
+                .await
+                .map_err(|e| anyhow!("could not get nft uri: {}", e))?,
             false => url,
         };
 
-        let data = match self.web.get_image_data(image_url).await {
-            Ok(data) => data,
-            Err(e) => return Err(format!("could not get image data: {}", e)),
-        };
+        let data = self
+            .web
+            .get_image_data(image_url)
+            .await
+            .map_err(|e| anyhow!("could not get image data: {}", e))?;
 
         self.upload_image
             .execute(file_name, &data, Variant::Avatar)

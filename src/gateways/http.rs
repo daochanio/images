@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{settings::Settings, usecases::gateways::Web};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use reqwest::{
     redirect::{self},
@@ -36,29 +37,20 @@ struct NFTMetadata {
 
 #[async_trait]
 impl Web for Http {
-    async fn get_nft_image_url(&self, url: String) -> Result<String, String> {
+    async fn get_nft_image_url(&self, url: String) -> Result<String> {
         tracing::info!("requesting nft metadata from {}", url);
 
-        let body = match self.get_with_status_check(url).await {
-            Ok(r) => match self.read_body_with_limit(r, MAX_BODY_SIZE).await {
-                Ok(b) => b,
-                Err(e) => return Err(format!("could not read nft metadata: {}", e)),
-            },
-            Err(e) => return Err(format!("could not get nft metadata: {}", e)),
-        };
+        let response = self
+            .get_with_status_check(url)
+            .await
+            .map_err(|e| anyhow!("could not get nft metadata: {}", e))?;
+        let body = self
+            .read_body_with_limit(response, MAX_BODY_SIZE)
+            .await
+            .map_err(|e| anyhow!("could not read body of nft metadata: {}", e))?;
 
-        let metadata = match serde_json::from_slice::<NFTMetadata>(&body) {
-            Ok(j) => j,
-            Err(e) => return Err(format!("could not parse nft metadata as json: {}", e)),
-        };
-
-        // let metadata = match self.client.get(&url).send().await {
-        //     Ok(r) => match r.json::<NFTMetadata>().await {
-        //         Ok(j) => j,
-        //         Err(e) => return Err(format!("could not parse nft metada as json: {}", e)),
-        //     },
-        //     Err(e) => return Err(format!("could not get nft metadata: {}", e)),
-        // };
+        let metadata = serde_json::from_slice::<NFTMetadata>(&body)
+            .map_err(|e| anyhow!("could not deserialize nft metadata as json: {}", e))?;
 
         if let Some(image) = metadata.image {
             return Ok(image);
@@ -68,49 +60,51 @@ impl Web for Http {
             return Ok(image_data);
         }
 
-        return Err(String::from("could not get nft image uri"));
+        return Err(anyhow!("could not get nft image uri"));
     }
 
-    async fn get_image_data(&self, url: String) -> Result<Vec<u8>, String> {
+    async fn get_image_data(&self, url: String) -> Result<Vec<u8>> {
         tracing::info!("requesting image from {}", url);
 
-        let body = match self.get_with_status_check(url).await {
-            Ok(r) => match self.read_body_with_limit(r, MAX_BODY_SIZE).await {
-                Ok(b) => b,
-                Err(e) => return Err(format!("could not get image bytes: {}", e)),
-            },
-            Err(e) => return Err(format!("could not get image: {}", e)),
-        };
+        let response = self
+            .get_with_status_check(url)
+            .await
+            .map_err(|e| anyhow!("could not get image: {}", e))?;
+        let body = self
+            .read_body_with_limit(response, MAX_BODY_SIZE)
+            .await
+            .map_err(|e| anyhow!("could not read iamge body: {}", e))?;
 
         return Ok(body.to_vec());
     }
 }
 
 impl Http {
-    async fn get_with_status_check(&self, url: String) -> Result<Response, String> {
+    async fn get_with_status_check(&self, url: String) -> Result<Response> {
         let url = self.parse_url(url);
-        let resp = match self.client.get(&url).send().await {
-            Ok(r) => r,
-            Err(e) => return Err(format!("could not get {}: {}", url, e)),
-        };
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| anyhow!("could not get {}: {}", url, e))?;
 
         if !resp.status().is_success() {
-            return Err(format!("invalid status for get {}: {}", url, resp.status()));
+            return Err(anyhow!("invalid status for get {}: {}", url, resp.status()));
         }
 
         Ok(resp)
     }
 
-    async fn read_body_with_limit(
-        &self,
-        mut resp: Response,
-        limit: usize,
-    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    async fn read_body_with_limit(&self, mut resp: Response, limit: usize) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
 
         while let Some(chunk) = resp.chunk().await? {
             if buf.len() + chunk.len() > limit {
-                return Err(format!("response body too large {}", buf.len() + chunk.len()).into());
+                return Err(anyhow!(
+                    "response body too large {}",
+                    buf.len() + chunk.len()
+                ));
             }
             buf.extend_from_slice(&chunk);
         }

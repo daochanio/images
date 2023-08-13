@@ -1,4 +1,5 @@
 use crate::{common::variant::Variant, settings::Settings, usecases::gateways::Storage};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use aws_sdk_s3::{config::Region, error::SdkError, primitives::ByteStream, Client};
 use std::sync::Arc;
@@ -27,11 +28,11 @@ impl Storage for S3 {
         variant: Variant,
         content_type: String,
         body: Vec<u8>,
-    ) -> Result<String, String> {
+    ) -> Result<String> {
         let bucket = self.settings.bucket();
         let key = self.get_key(file_name.clone(), variant);
-        return match self
-            .client
+
+        self.client
             .put_object()
             .bucket(bucket)
             .key(key.clone())
@@ -40,19 +41,15 @@ impl Storage for S3 {
             .body(ByteStream::from(body))
             .send()
             .await
-        {
-            Ok(_) => Ok(self.get_external_url(key)),
-            Err(e) => Err(format!("could not upload image: {}", e)),
-        };
+            .context("could not upload image")?;
+
+        Ok(self.get_external_url(key))
     }
 
-    async fn get(
-        &self,
-        variant: Variant,
-        file_name: String,
-    ) -> Result<Option<(String, String)>, String> {
+    async fn get(&self, variant: Variant, file_name: String) -> Result<Option<(String, String)>> {
         let bucket = self.settings.bucket();
         let key = self.get_key(file_name.clone(), variant);
+
         let header = match self
             .client
             .head_object()
@@ -67,17 +64,17 @@ impl Storage for S3 {
                     if err.err().is_not_found() {
                         return Ok(None);
                     } else {
-                        return Err(format!("could not check if image exists: {}", err.err()));
+                        return Err(anyhow!("could not check if image exists: {}", err.err()));
                     }
                 }
-                _ => return Err(format!("could not check if image exists: {}", e)),
+                _ => return Err(anyhow!("could not check if image exists: {}", e)),
             },
         };
 
-        let content_type = match header.content_type() {
-            Some(content_type) => content_type.to_string(),
-            None => return Err(format!("could not get content type for {}", key)),
-        };
+        let content_type = header
+            .content_type()
+            .ok_or(anyhow!("could not get content type for {}", key))?
+            .to_string();
         let url = self.get_external_url(key);
 
         Ok(Some((url, content_type)))
