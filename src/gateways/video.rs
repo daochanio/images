@@ -59,6 +59,8 @@ impl Video for VideoImpl {
             .arg("+faststart")
             .arg("-pix_fmt") // pixel format
             .arg("yuv420p") // required for safari and firefox
+            .arg("-vf") // video filter
+            .arg("pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2") // make dimensions even (required for yuv420p I think)
             .arg(&output_path)
             .spawn()
             .context("could not spawn video process")?;

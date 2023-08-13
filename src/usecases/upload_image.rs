@@ -43,7 +43,7 @@ impl UploadImage {
             }
         };
 
-        let (thumbnail, output_format) = result.context("could not resize image")?;
+        let (thumbnail, output_format) = result.context("could not format image")?;
 
         let (original_result, thumbnail_result) = tokio::join!(
             self.storage.upload(
